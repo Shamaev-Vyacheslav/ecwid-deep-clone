@@ -10,23 +10,25 @@ public class DeepCloneSerializableTest {
 
     @Test
     public void cloneSerializableClass() {
-        SerializableClass serializable = new SerializableClass(300, "copy me!");
+        SerializableClass serializable = new SerializableClass(300, new Object(), "clone me!");
         SerializableClass clone = DeepClone.of(serializable);
 
         Assert.assertNotEquals(serializable, clone);
         Assert.assertFalse(serializable.serializableField == clone.serializableField);
         Assert.assertTrue(serializable.serializableField.equals(clone.serializableField));
-        Assert.assertFalse(serializable.transientField == clone.transientField);
-        Assert.assertTrue(serializable.transientField.equals(clone.transientField));
+        Assert.assertFalse(serializable.transientObject == clone.transientObject);
+        Assert.assertTrue(serializable.transientString.equals(clone.transientString));
     }
 
     private static class SerializableClass implements Serializable {
         private Integer serializableField;
-        private transient String transientField;
+        private transient Object transientObject;
+        private transient String transientString;
 
-        private SerializableClass(Integer serializableField, String transientField) {
+        private SerializableClass(Integer serializableField, Object transientObject, String transientString) {
             this.serializableField = serializableField;
-            this.transientField = transientField;
+            this.transientObject = transientObject;
+            this.transientString = transientString;
         }
     }
 }

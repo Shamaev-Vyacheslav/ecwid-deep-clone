@@ -59,10 +59,10 @@ public class DeepClone {
                     .findFirst();
 
             if (constructorOptional.isPresent()) {
-                Object newValue = constructorOptional.get().newInstance(value);
+                Object newValue = constructorOptional.get().newInstance(value); //TODO: some bad people can trick me here :(
                 field.set(objectToClone, newValue);
             } else {
-                field.set(objectToClone, value); //TODO: fix
+                field.set(objectToClone, DeepClone.of(value));
             }
         } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
             e.printStackTrace();
