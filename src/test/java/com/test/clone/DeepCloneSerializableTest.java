@@ -7,11 +7,13 @@ import java.io.Serializable;
 
 //deep clone of Serializable class is the simplest
 public class DeepCloneSerializableTest {
+
     @Test
     public void cloneSerializableClass() {
         SerializableClass serializable = new SerializableClass(300, "copy me!");
         SerializableClass clone = DeepClone.of(serializable);
 
+        Assert.assertNotEquals(serializable, clone);
         Assert.assertFalse(serializable.serializableField == clone.serializableField);
         Assert.assertTrue(serializable.serializableField.equals(clone.serializableField));
         Assert.assertFalse(serializable.transientField == clone.transientField);
@@ -22,7 +24,7 @@ public class DeepCloneSerializableTest {
         private Integer serializableField;
         private transient String transientField;
 
-        public SerializableClass(Integer serializableField, String transientField) {
+        private SerializableClass(Integer serializableField, String transientField) {
             this.serializableField = serializableField;
             this.transientField = transientField;
         }
