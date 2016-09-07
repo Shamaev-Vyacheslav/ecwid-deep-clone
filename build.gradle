@@ -1,0 +1,14 @@
+apply plugin: "idea"
+apply plugin: "java"
+
+compileJava {
+    options.encoding = "UTF-8"
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+repositories {
+    mavenCentral()
+}
