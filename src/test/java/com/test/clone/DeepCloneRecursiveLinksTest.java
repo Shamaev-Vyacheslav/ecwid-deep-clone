@@ -3,7 +3,7 @@ package com.test.clone;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class DeepCloneRecurciveLinksTest {
+public class DeepCloneRecursiveLinksTest {
     @Test
     public void cloneRecursiveLinkedObject() {
         RecursiveLinkClass clone = DeepClone.of(new RecursiveLinkClass());

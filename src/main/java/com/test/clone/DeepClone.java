@@ -7,34 +7,75 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class DeepClone<T> {
+public class DeepClone {
+    private static final Map<Class, Object> DEFAULT_VALUE_PRIMITIVES;
+
+    static {
+        HashMap<Class, Object> primitivesMap = new HashMap<>();
+        primitivesMap.put(byte.class, (byte) 0);
+        primitivesMap.put(short.class, (short) 0);
+        primitivesMap.put(int.class, 0);
+        primitivesMap.put(long.class, 0L);
+        primitivesMap.put(float.class, 0.0f);
+        primitivesMap.put(double.class, 0.0d);
+        primitivesMap.put(char.class, '\u0000');
+        primitivesMap.put(boolean.class, false);
+
+        DEFAULT_VALUE_PRIMITIVES = Collections.unmodifiableMap(primitivesMap);
+    }
+
     private Map<Object, Object> clonedObjects = new TreeMap<>((x, y) -> x == y ? 0 : 1);
 
-    private static final List<Object> DEFAULT_VALUE_PRIMITIVES =
-            Collections.unmodifiableList(Arrays.asList((byte) 0, (short) 0, 0, 0L, 0.0f, 0.0d, '\u0000', false, ""));
+    private Set<Object> knownObjects = new HashSet<>();
 
-    private DeepClone() {
-
+    private DeepClone(Object object) {
+        knownObjects.addAll(DEFAULT_VALUE_PRIMITIVES.values());
+        knownObjects.add("");
+        addFieldsToKnownObjects(object);
     }
 
+    private void addFieldsToKnownObjects(Object object) {
+        List<Field> fields = Stream.of(object.getClass().getFields())
+                .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                .collect(Collectors.toList());
+
+        List<Object> values = new ArrayList<>();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                Object newValue = field.get(object);
+                if (!values.contains(newValue)) {
+                    values.add(newValue);
+                }
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+                //won't happen
+            }
+        }
+        knownObjects.addAll(values);
+        knownObjects.stream()
+                .filter(o -> !"java.lang".equals(o.getClass().getPackage().getName()))
+                .forEach(this::addFieldsToKnownObjects);
+    }
+
+    @SuppressWarnings("unchecked")
     public static <T> T of(T object) {
-        return object == null ? null : new DeepClone<T>().createCopy(object);
+        return object == null ? null : (T) new DeepClone(object).createCopy(object);
     }
 
-    private T createCopy(T object) {
+    private Object createCopy(Object object) {
         if (clonedObjects.containsKey(object)) {
-            @SuppressWarnings("unchecked")
-            T clone = (T) clonedObjects.get(object);
-            return clone;
+            return clonedObjects.get(object);
         }
 
         if (object instanceof Serializable) {
-            return createCopySerializable(object);
+            return this.createCopy((Serializable) object);
         }
 
-        T clone = createDummyInstance(object);
+        Object clone = createDummyInstance(object);
 
         clonedObjects.put(object, clone);
         setFieldsData(object, clone);
@@ -42,19 +83,19 @@ public class DeepClone<T> {
         return clone;
     }
 
-    private T createDummyInstance(T object) {
+    private Object createDummyInstance(Object object) {
         Optional<?> constructedCopy = Stream.of(object.getClass().getDeclaredConstructors())
                 .map(c -> invokeConstructor(c, object))
                 .filter(c -> c != null)
                 .findFirst();
         if (constructedCopy.isPresent()) {
-            return (T) constructedCopy.get();
+            return constructedCopy.get();
         } else {
             throw new RuntimeException(); // TODO: explain!
         }
     }
 
-    private T invokeConstructor(Constructor<?> constructor, T object) {
+    private Object invokeConstructor(Constructor<?> constructor, Object object) {
         if (!constructor.isAccessible()) {
             constructor.setAccessible(true);
         }
@@ -62,19 +103,19 @@ public class DeepClone<T> {
         List<Object> constructorParams = new ArrayList<>(constructor.getParameterCount());
 
         for (Class<?> clazz : constructor.getParameterTypes()) {
-            Stream<Object> knownObjectsStream = Stream.concat(Stream.of(object),
-                    Stream.concat(clonedObjects.keySet().stream(), DEFAULT_VALUE_PRIMITIVES.stream()));
-            //build collection with same content as this stream at the beginning of copying process
-            // using data retrieved from cloning object
+            if (DEFAULT_VALUE_PRIMITIVES.containsKey(clazz)) {
+                constructorParams.add(DEFAULT_VALUE_PRIMITIVES.get(clazz));
+                continue;
+            }
 
-            Optional<Object> knownObject = knownObjectsStream
+            Optional<Object> knownObject = knownObjects.stream()
                     .filter(x -> x.getClass().equals(clazz))
                     .findFirst();
 
             if (knownObject.isPresent()) {
                 constructorParams.add(knownObject.get());
             } else {
-                Optional<T> first = Stream.of(clazz.getDeclaredConstructors())
+                Optional<Object> first = Stream.of(clazz.getDeclaredConstructors())
                         .map(c -> invokeConstructor(c, object))
                         .filter(x -> x != null)
                         .findFirst();
@@ -87,13 +128,13 @@ public class DeepClone<T> {
         }
 
         try {
-            return (T) constructor.newInstance(constructorParams.toArray());
+            return constructor.newInstance(constructorParams.toArray());
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private T createCopySerializable(T object) {
+    private Object createCopy(Serializable object) {
         try {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
             ObjectOutputStream outputStream = new ObjectOutputStream(byteArrayOutputStream);
@@ -104,7 +145,7 @@ public class DeepClone<T> {
                     new ObjectInputStream(new ByteArrayInputStream(byteArrayOutputStream.toByteArray()));
 
             @SuppressWarnings("unchecked")
-            T clone = (T) inputStream.readObject();
+            Object clone = inputStream.readObject();
             inputStream.close();
 
             setFieldsData(object, clone, f -> Modifier.isTransient(f.getModifiers()));
@@ -112,40 +153,34 @@ public class DeepClone<T> {
             return clone;
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
-            throw new IllegalStateException("WTF!?");
+            throw new RuntimeException("WTF!?");
         }
     }
 
-    private void setFieldsData(T object, T clone) {
+    private void setFieldsData(Object object, Object clone) {
         setFieldsData(object, clone, t -> true);
     }
 
-    private void setFieldsData(T object, T clone, Predicate<Field> fieldFilterPredicate) {
+    private void setFieldsData(Object object, Object clone, Predicate<Field> fieldFilterPredicate) {
         Stream.of(object.getClass().getDeclaredFields())
                 .filter(f -> !Modifier.isStatic(f.getModifiers()))
                 .filter(fieldFilterPredicate)
                 .forEach(f -> cloneField(clone, object, f));
     }
 
-    private void cloneField(T objectToClone, T objectFromClone, Field field) {
+    private void cloneField(Object objectToClone, Object objectFromClone, Field field) {
         if (!field.isAccessible()) {
             field.setAccessible(true);
         }
+
         try {
             Object value = field.get(objectFromClone);
-            Optional<Constructor<?>> constructorOptional = Stream.of(value.getClass().getDeclaredConstructors())
-                    .filter(c -> c.getParameterCount() == 1 && c.getParameterTypes()[0].equals(value.getClass()))
-                    .findFirst();
+            Object clonedValue = createCopy(value);
 
-            if (constructorOptional.isPresent()) {
-                Object newValue = constructorOptional.get().newInstance(value);
-                field.set(objectToClone, newValue);
-            } else {
-                field.set(objectToClone, DeepClone.of(value));
-            }
-        } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+            field.set(objectToClone, clonedValue);
+        } catch (IllegalAccessException e) {
             e.printStackTrace();
-            throw new IllegalStateException("WTF!?");
+            throw new RuntimeException("WTF!?");
         }
     }
 }
