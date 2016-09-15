@@ -7,6 +7,7 @@ compileJava {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
+    compile group: 'com.ea.agentloader', name: 'ea-agent-loader', version: '1.0.2'
 }
 
 repositories {

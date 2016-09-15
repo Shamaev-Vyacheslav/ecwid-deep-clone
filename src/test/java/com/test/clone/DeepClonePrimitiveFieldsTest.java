@@ -1,7 +1,8 @@
 package com.test.clone;
 
-import org.junit.Assert;
 import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 public class DeepClonePrimitiveFieldsTest {
 
@@ -10,8 +11,8 @@ public class DeepClonePrimitiveFieldsTest {
         PrimitiveFieldsClass object = new PrimitiveFieldsClass(Integer.MAX_VALUE, Double.MAX_VALUE);
         PrimitiveFieldsClass clone = DeepClone.of(object);
 
-        Assert.assertTrue(object.intField == clone.intField);
-        Assert.assertTrue(object.doubleField == clone.doubleField);
+        assertTrue(object.intField == clone.intField);
+        assertTrue(object.doubleField == clone.doubleField);
     }
 
     private static class PrimitiveFieldsClass {
@@ -29,10 +30,10 @@ public class DeepClonePrimitiveFieldsTest {
         BoxedPrimitiveFieldsClass object = new BoxedPrimitiveFieldsClass(Integer.MAX_VALUE, Double.MAX_VALUE);
         BoxedPrimitiveFieldsClass clone = DeepClone.of(object);
 
-        Assert.assertFalse(object.intField == clone.intField);
-        Assert.assertTrue(object.intField.equals(clone.intField));
-        Assert.assertFalse(object.doubleField == clone.doubleField);
-        Assert.assertTrue(object.doubleField.equals(clone.doubleField));
+        assertFalse(object.intField == clone.intField);
+        assertEquals(object.intField, clone.intField);
+        assertFalse(object.doubleField == clone.doubleField);
+        assertEquals(object.doubleField, clone.doubleField);
     }
 
     private static class BoxedPrimitiveFieldsClass {
