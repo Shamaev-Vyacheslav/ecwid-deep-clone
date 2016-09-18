@@ -40,6 +40,11 @@ public class DeepClone {
 
     private final Set<Object> knownObjects = new HashSet<>();
 
+    @SuppressWarnings("unchecked")
+    public static <T> T of(T object) {
+        return object == null ? null : (T) new DeepClone(object).createCopy(object);
+    }
+
     private DeepClone(Object object) {
         knownObjects.addAll(DEFAULT_VALUE_PRIMITIVES.values());
         knownObjects.add("");
@@ -64,11 +69,6 @@ public class DeepClone {
         }
         knownObjects.addAll(values);
         values.forEach(this::addFieldsToKnownObjects);
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> T of(T object) {
-        return object == null ? null : (T) new DeepClone(object).createCopy(object);
     }
 
     private Object createCopy(Object object) {
@@ -100,6 +100,8 @@ public class DeepClone {
         Class<?> superClass = clazz.getInterfaces()[0];
         return superClass.getPackage() != null
                 && "java.util.function".equals(superClass.getPackage().getName());
+        //for some reason I can't determine if class is implementation of custom functional interface at runtime but
+        // this implementation doesn't cover very few cases
     }
 
     private Object createCopy(Serializable object) {
