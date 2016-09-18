@@ -11,6 +11,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.nio.file.FileSystem;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -20,7 +21,7 @@ public class DeepClone {
 
     //collection of classes provided by jdk to access computer resources
     private static final List<Class> SKIP_CLONING_CLASSES = Collections.unmodifiableList(
-            Collections.singletonList(FileSystem.class));
+            Arrays.asList(FileSystem.class, ExecutorService.class));
 
     static {
         AgentLoader.loadAgentClass(ClassLoaderAgent.class.getName(), null);
@@ -40,9 +41,9 @@ public class DeepClone {
         DEFAULT_VALUE_PRIMITIVES = Collections.unmodifiableMap(primitivesMap);
     }
 
-    private Map<Object, Object> clonedObjects = new TreeMap<>((x, y) -> x == y ? 0 : 1);
+    private final Map<Object, Object> clonedObjects = new TreeMap<>((x, y) -> x == y ? 0 : 1);
 
-    private Set<Object> knownObjects = new HashSet<>();
+    private final Set<Object> knownObjects = new HashSet<>();
 
     private DeepClone(Object object) {
         knownObjects.addAll(DEFAULT_VALUE_PRIMITIVES.values());
@@ -62,7 +63,7 @@ public class DeepClone {
                     values.add(newValue);
                 }
             } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);
+                throw new CloneOperationException(e);
                 //won't happen
             }
         }
@@ -80,6 +81,11 @@ public class DeepClone {
             return clonedObjects.get(object);
         }
 
+        if (object == null
+                || isFunctionalInterfaceImpl(object.getClass())) {
+            return object;
+        }
+
         if (object instanceof Serializable) {
             return this.createCopy((Serializable) object);
         }
@@ -92,138 +98,13 @@ public class DeepClone {
         return clone;
     }
 
-    private Object createDummyInstance(Object object) {
-        if (SKIP_CLONING_CLASSES.stream().anyMatch(x -> x.isInstance(object))
-                || object == null) {
-            return object;
+    private boolean isFunctionalInterfaceImpl(Class<?> clazz) {
+        if (clazz.getInterfaces().length != 1) {
+            return false;
         }
-
-        Optional<?> constructedCopy = Stream.of(object.getClass().getDeclaredConstructors())
-                .map(this::invokeConstructor)
-                .filter(c -> c != null)
-                .findFirst();
-        if (constructedCopy.isPresent()) {
-            return constructedCopy.get();
-        } else {
-            constructedCopy = Stream.of(object.getClass().getDeclaredConstructors())
-                    .map(this::invokeConstructorForce)
-                    .filter(c -> c != null)
-                    .findFirst();
-            if (constructedCopy.isPresent()) {
-                return constructedCopy.get();
-            } else {
-                throw new CloneOperationException("Failed to create clone of object [" + object
-                        + "]. Calls of all object constructors failed");
-            }
-        }
-    }
-
-    private Object createDummyInstance(Class<?> c) {
-        Optional<?> constructedCopy = Stream.of(c.getDeclaredConstructors())
-                .map(this::invokeConstructor)
-                .filter(i -> i != null)
-                .findFirst();
-        if (constructedCopy.isPresent()) {
-            return constructedCopy.get();
-        } else {
-            return Stream.of(c.getDeclaredConstructors())
-                    .map(this::invokeConstructorForce)
-                    .filter(i -> i != null)
-                    .findFirst()
-                    .orElse(null);
-        }
-    }
-
-    private Object invokeConstructor(Constructor<?> constructor) {
-        if (!constructor.isAccessible()) {
-            constructor.setAccessible(true);
-        }
-
-        List<Object> constructorParams = new ArrayList<>(constructor.getParameterCount());
-
-        for (Class<?> clazz : constructor.getParameterTypes()) {
-            if (DEFAULT_VALUE_PRIMITIVES.containsKey(clazz)) {
-                constructorParams.add(DEFAULT_VALUE_PRIMITIVES.get(clazz));
-                continue;
-            }
-
-            Optional<Object> knownObject = knownObjects.stream()
-                    .filter(clazz::isInstance)
-                    .findFirst();
-
-            if (knownObject.isPresent()) {
-                constructorParams.add(knownObject.get());
-            } else {
-                Optional<Object> first = Stream.of(clazz.getDeclaredConstructors())
-                        .map(this::invokeConstructor)
-                        .filter(x -> x != null)
-                        .findFirst();
-                if (first.isPresent()) {
-                    constructorParams.add(first);
-                } else {
-                    if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
-                        List<Class> appropriateClasses = ClassLoaderAgent.getLoadedClasses().stream()
-                                .filter(c -> !c.isInterface())
-                                .filter(c -> !Modifier.isAbstract(c.getModifiers()))
-                                .filter(clazz::isAssignableFrom)
-                                .collect(Collectors.toList());
-
-                        constructorParams.add(appropriateClasses.stream()
-                                .map(Class::getDeclaredConstructors)
-                                .flatMap(Stream::of)
-                                .sorted((x, y) -> x.getParameterCount() - y.getParameterCount())
-                                .filter(c -> Stream.of(c.getParameterTypes())
-                                        .noneMatch(t -> clazz.isAssignableFrom(t) || t.isAssignableFrom(clazz)))
-                                .map(this::invokeConstructor)
-                                .filter(x -> x != null)
-                                .findFirst()
-                                .orElse(null));
-                    } else {
-                        constructorParams.add(null); //at least I'll try
-                    }
-                }
-            }
-        }
-
-        try {
-            return constructor.newInstance(constructorParams.toArray());
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            return null;
-        }
-    }
-
-    private Object invokeConstructorForce(Constructor<?> constructor) {
-        if (!constructor.isAccessible()) {
-            constructor.setAccessible(true);
-        }
-
-        List<List<Object>> paramsCollection = Stream.of(constructor.getParameterTypes())
-                .map(this::getKnownInstances)
-                .collect(Collectors.toList());
-
-        Optional<?> constructedObject = CloneArgumentsCombiner.generateStream(paramsCollection)
-                .map(List::toArray)
-                .map(c -> {
-            try {
-                return constructor.newInstance(c);
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                return null;
-            }
-        })
-                .filter(o -> o != null)
-                .findFirst();
-
-        if (constructedObject.isPresent()) {
-            return constructedObject.get();
-        } else {
-            return null;
-        }
-    }
-
-    private List<Object> getKnownInstances(Class<?> c) {
-        return knownObjects.stream()
-                .filter(o -> c.isAssignableFrom(o.getClass()))
-                .collect(Collectors.toList());
+        Class<?> superClass = clazz.getInterfaces()[0];
+        return superClass.getPackage() != null
+                && "java.util.function".equals(superClass.getPackage().getName());
     }
 
     private Object createCopy(Serializable object) {
@@ -236,7 +117,6 @@ public class DeepClone {
             ObjectInputStream inputStream =
                     new ObjectInputStream(new ByteArrayInputStream(byteArrayOutputStream.toByteArray()));
 
-            @SuppressWarnings("unchecked")
             Object clone = inputStream.readObject();
             inputStream.close();
 
@@ -273,6 +153,124 @@ public class DeepClone {
             field.set(objectToClone, clonedValue);
         } catch (IllegalAccessException e) {
             throw new CloneOperationException(e);
+        }
+    }
+
+    private Object createDummyInstance(Object object) {
+        if (SKIP_CLONING_CLASSES.stream().anyMatch(x -> x.isInstance(object))
+                || object == null) {
+            return object;
+        }
+
+        Optional<?> dummyInstance = createDummyInstance(object.getClass());
+
+        if (dummyInstance.isPresent()) {
+            return dummyInstance.get();
+        } else {
+            throw new CloneOperationException("Failed to create clone of object [" + object
+                    + "]. Calls of all object constructors failed");
+        }
+    }
+
+    private Optional<?> invokeConstructor(Constructor<?> constructor) {
+        if (!constructor.isAccessible()) {
+            constructor.setAccessible(true);
+        }
+
+        List<Object> constructorParams = new ArrayList<>(constructor.getParameterCount());
+
+        for (Class<?> clazz : constructor.getParameterTypes()) {
+            if (DEFAULT_VALUE_PRIMITIVES.containsKey(clazz)) {
+                constructorParams.add(DEFAULT_VALUE_PRIMITIVES.get(clazz));
+                continue;
+            }
+
+            Optional<Object> knownObject = knownObjects.stream()
+                    .filter(clazz::isInstance)
+                    .findFirst();
+
+            if (knownObject.isPresent()) {
+                constructorParams.add(knownObject.get());
+            } else {
+                Optional<?> dummyInstance = createDummyInstance(clazz);
+                if (dummyInstance.isPresent()) {
+                    constructorParams.add(dummyInstance);
+                } else {
+                    if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
+                        constructorParams.add(ClassLoaderAgent.getLoadedClasses().stream()
+                                .filter(c -> !c.isInterface())
+                                .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                                .filter(clazz::isAssignableFrom)
+                                .map(Class::getDeclaredConstructors)
+                                .flatMap(Stream::of)
+                                .sorted((x, y) -> x.getParameterCount() - y.getParameterCount())
+                                .filter(c -> Stream.of(c.getParameterTypes()).noneMatch(clazz::isAssignableFrom))
+                                .map(this::invokeConstructor)
+                                .filter(Optional::isPresent)
+                                .map(Optional::get)
+                                .findFirst()
+                                .orElse(null));
+                    } else {
+                        constructorParams.add(null); //at least I'll try
+                    }
+                }
+            }
+        }
+
+        try {
+            return Optional.of(constructor.newInstance(constructorParams.toArray()));
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<?> createDummyInstance(Class<?> c) {
+        Optional<?> constructedCopy = Stream.of(c.getDeclaredConstructors())
+                .sorted((x, y) -> x.getParameterCount() - y.getParameterCount())
+                .map(this::invokeConstructor)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .findFirst();
+        if (constructedCopy.isPresent()) {
+            return constructedCopy;
+        } else {
+            return Stream.of(c.getDeclaredConstructors())
+                    .sorted((x, y) -> x.getParameterCount() - y.getParameterCount())
+                    .map(this::invokeConstructorForce)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .findFirst();
+        }
+    }
+
+    private Optional<?> invokeConstructorForce(Constructor<?> constructor) {
+        if (!constructor.isAccessible()) {
+            constructor.setAccessible(true);
+        }
+
+        List<List<Object>> paramsCollection = Stream.of(constructor.getParameterTypes())
+                .map(this::getKnownInstances)
+                .collect(Collectors.toList());
+
+        return CloneArgumentsCombiner.generateStream(paramsCollection)
+                .map(List::toArray)
+                .map(p -> invokeConstructor(constructor, p))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .findFirst();
+    }
+
+    private List<Object> getKnownInstances(Class<?> classToSearch) {
+        return knownObjects.stream()
+                .filter(o -> classToSearch.isAssignableFrom(o.getClass()))
+                .collect(Collectors.toList());
+    }
+
+    private Optional<?> invokeConstructor(Constructor<?> constructor, Object[] params) {
+        try {
+            return Optional.of(constructor.newInstance(params));
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            return Optional.empty();
         }
     }
 }

@@ -10,8 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Predicate;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.*;
 
 public class DeepCloneInterfacesTest {
 
@@ -105,6 +104,7 @@ public class DeepCloneInterfacesTest {
         FunctionalInterfaceConstructorClassOne cloneOne = DeepClone.of(objectOne);
 
         assertFalse(objectOne == cloneOne);
+        assertTrue(objectOne.predicate == cloneOne.predicate);
 
         FunctionalInterfaceConstructorClassTwo objectTwo = new FunctionalInterfaceConstructorClassTwo(x -> true);
         FunctionalInterfaceConstructorClassTwo cloneTwo = DeepClone.of(objectTwo);

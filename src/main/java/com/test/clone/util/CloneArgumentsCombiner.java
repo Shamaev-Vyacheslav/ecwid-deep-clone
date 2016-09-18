@@ -6,22 +6,24 @@ import java.util.stream.Stream;
 
 public class CloneArgumentsCombiner {
 
-    private List<List<Object>> argumentsList;
+    private final List<List<Object>> argumentsList;
 
-    private List<Object> currentValues;
-    private List<Iterator<Object>> iterators;
+    private final List<Object> currentValues;
+    private final List<Iterator<Object>> iterators;
 
     private CloneArgumentsCombiner(List<List<Object>> arguments) {
-        this.argumentsList = Collections.unmodifiableList(arguments);
+        argumentsList = Collections.unmodifiableList(arguments.stream()
+                .map(ArrayList::new)
+                .collect(Collectors.toList()));
         argumentsList.stream()
                 .filter(List::isEmpty)
                 .forEach(x -> x.add(null));
 
-        this.iterators = this.argumentsList.stream()
+        iterators = argumentsList.stream()
                 .map(List::iterator)
                 .collect(Collectors.toList());
 
-        this.currentValues = iterators.stream()
+        currentValues = iterators.stream()
                 .map(Iterator::next)
                 .collect(Collectors.toList());
     }
@@ -33,10 +35,11 @@ public class CloneArgumentsCombiner {
             return Stream.empty();
         }
         CloneArgumentsCombiner collectionCombiner = new CloneArgumentsCombiner(arguments);
+        Integer streamLimit = collectionCombiner.argumentsList.stream()
+                .map(Collection::size)
+                .reduce(1, (x, y) -> x * y);
         return Stream.generate(collectionCombiner::performIterateStep)
-                .limit(collectionCombiner.argumentsList.stream()
-                             .map(Collection::size)
-                             .reduce(1, (x, y) -> x*y));
+                .limit(streamLimit);
     }
 
     private List<Object> performIterateStep() {

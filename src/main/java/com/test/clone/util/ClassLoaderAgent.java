@@ -12,7 +12,7 @@ public class ClassLoaderAgent {
 
     private static Instrumentation instrumentation;
 
-    public static void agentmain(String args, Instrumentation instrumentation) throws Exception {
+    public static void agentmain(String args, Instrumentation instrumentation) {
         ClassLoaderAgent.instrumentation = instrumentation;
     }
 
