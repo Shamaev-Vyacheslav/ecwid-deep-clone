@@ -4,7 +4,7 @@ import java.lang.instrument.Instrumentation;
 import java.util.Arrays;
 import java.util.List;
 
-public class ClassLoaderAgent {
+class ClassLoaderAgent {
 
     private ClassLoaderAgent() {
 
@@ -16,7 +16,8 @@ public class ClassLoaderAgent {
         ClassLoaderAgent.instrumentation = instrumentation;
     }
 
-    public static List<Class> getLoadedClasses() {
+    @SuppressWarnings("unchecked")
+    static List<Class<?>> getLoadedClasses() {
         return Arrays.asList(instrumentation.getAllLoadedClasses());
     }
 }

@@ -1,3 +1,5 @@
+import javax.tools.ToolProvider
+
 apply plugin: "idea"
 apply plugin: "java"
 
@@ -6,8 +8,8 @@ compileJava {
 }
 
 dependencies {
+    compile files(((URLClassLoader) ToolProvider.getSystemToolClassLoader()).getURLs())
     testCompile group: 'junit', name: 'junit', version: '4.12'
-    compile group: 'com.ea.agentloader', name: 'ea-agent-loader', version: '1.0.2'
 }
 
 repositories {

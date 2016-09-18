@@ -1,7 +1,6 @@
 package com.test.clone;
 
-import com.ea.agentloader.AgentLoader;
-import com.test.clone.util.ClassLoaderAgent;
+import com.test.clone.util.ClassLoaderUtil;
 import com.test.clone.util.CloneArgumentsCombiner;
 
 import java.io.*;
@@ -22,10 +21,6 @@ public class DeepClone {
     //collection of classes provided by jdk to access computer resources
     private static final List<Class> SKIP_CLONING_CLASSES = Collections.unmodifiableList(
             Arrays.asList(FileSystem.class, ExecutorService.class));
-
-    static {
-        AgentLoader.loadAgentClass(ClassLoaderAgent.class.getName(), null);
-    }
 
     static {
         HashMap<Class, Object> primitivesMap = new HashMap<>();
@@ -197,7 +192,7 @@ public class DeepClone {
                     constructorParams.add(dummyInstance);
                 } else {
                     if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
-                        constructorParams.add(ClassLoaderAgent.getLoadedClasses().stream()
+                        constructorParams.add(ClassLoaderUtil.getLoadedClasses().stream()
                                 .filter(c -> !c.isInterface())
                                 .filter(c -> !Modifier.isAbstract(c.getModifiers()))
                                 .filter(clazz::isAssignableFrom)
