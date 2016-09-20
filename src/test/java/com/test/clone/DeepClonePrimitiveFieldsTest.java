@@ -3,6 +3,7 @@ package com.test.clone;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -85,6 +86,17 @@ public class DeepClonePrimitiveFieldsTest {
         object.add(new BoxedPrimitiveFieldsClass(80, 5.2));
 
         List<BoxedPrimitiveFieldsClass> clone = DeepClone.of(object);
+        assertEquals(object, clone);
+    }
+
+    @Test
+    public void cloneListListBoxedPrimitives() {
+        List<BoxedPrimitiveFieldsClass> innerList = new ArrayList<>();
+        innerList.add(new BoxedPrimitiveFieldsClass(90, .2));
+        innerList.add(new BoxedPrimitiveFieldsClass(80, 5.2));
+
+        ArrayList<List<BoxedPrimitiveFieldsClass>> object = new ArrayList<>(Collections.singletonList(innerList));
+        List<List<BoxedPrimitiveFieldsClass>> clone = DeepClone.of(object);
         assertEquals(object, clone);
     }
 

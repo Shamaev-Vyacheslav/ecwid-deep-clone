@@ -110,6 +110,10 @@ public class DeepClone {
     }
 
     private boolean areAllObjectFieldsSerializable(Object object) {
+        return areAllObjectFieldsSerializable(object, new TreeSet<>((x, y) -> x == y ? 0 : 1));
+    }
+
+    private boolean areAllObjectFieldsSerializable(Object object, Set<Object> passedObjects) {
         List<Field> fields = Arrays.asList(object.getClass().getDeclaredFields());
         fields.stream()
                 .filter(f -> !f.isAccessible())
@@ -118,18 +122,27 @@ public class DeepClone {
         List<Object> fieldsValues = fields.stream()
                 .filter(f -> !Modifier.isStatic(f.getModifiers()))
                 .filter(f -> !Modifier.isTransient(f.getModifiers()) || f.getType().isArray())
-                .filter(f-> !f.getType().equals(String.class))
                 .map(f -> getFieldValue(f, object))
                 .map(this::transformObjectToStreamOfContent)
                 .reduce(Stream.empty(), Stream::concat)
                 .filter(o -> o != null)
+                .filter(o -> o.getClass().getPackage() != null
+                        && !"java.lang".equals(o.getClass().getPackage().getName())) //skip native magic
                 .collect(Collectors.toList());
 
         if (object.getClass().isArray()) {
             fieldsValues.addAll(transformObjectToStreamOfContent(object).collect(Collectors.toList()));
         }
 
-        return fieldsValues.stream().allMatch(x -> x instanceof Serializable);
+        fieldsValues = fieldsValues.stream()
+                .filter(o -> !passedObjects.contains(o))
+                .collect(Collectors.toList());
+
+        passedObjects.addAll(fieldsValues);
+
+        return fieldsValues.stream()
+                .allMatch(x -> x instanceof Serializable
+                        && areAllObjectFieldsSerializable(x, passedObjects));
     }
 
     private Object getFieldValue(Field field, Object object) {
