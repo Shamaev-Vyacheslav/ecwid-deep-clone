@@ -1,11 +1,12 @@
 package com.test.clone;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.junit.Assert.*;
 
 public class DeepCloneBaseTest {
 
@@ -14,7 +15,7 @@ public class DeepCloneBaseTest {
         Object object = new Object();
         Object clone = DeepClone.of(object);
 
-        Assert.assertFalse(object == clone);
+        assertFalse(object == clone);
     }
 
     @Test
@@ -25,7 +26,7 @@ public class DeepCloneBaseTest {
         StaticFieldClass object = new StaticFieldClass();
         DeepClone.of(object);
 
-        Assert.assertTrue(testStr == StaticFieldClass.string);
+        assertTrue(testStr == StaticFieldClass.string);
     }
 
     private static class StaticFieldClass {
@@ -35,7 +36,7 @@ public class DeepCloneBaseTest {
     @Test
     public void testEnumClone() {
         Color clone = DeepClone.of(Color.BLUE);
-        Assert.assertTrue(clone == Color.BLUE); //actually, you shouldn't do this
+        assertTrue(clone == Color.BLUE); //actually, you shouldn't do this
     }
 
     private enum Color {
@@ -52,8 +53,8 @@ public class DeepCloneBaseTest {
 
         List<String> stringListClone = DeepClone.of(stringList);
 
-        Assert.assertFalse(stringList == stringListClone);
-        Assert.assertEquals(stringList, stringListClone);
+        assertFalse(stringList == stringListClone);
+        assertEquals(stringList, stringListClone);
     }
 
     @Test
@@ -61,7 +62,7 @@ public class DeepCloneBaseTest {
         FinalFieldClass object = new FinalFieldClass("final field");
         FinalFieldClass clone = DeepClone.of(object);
 
-        Assert.assertEquals(object.str, clone.str);
+        assertEquals(object.str, clone.str);
     }
 
     private static class FinalFieldClass {

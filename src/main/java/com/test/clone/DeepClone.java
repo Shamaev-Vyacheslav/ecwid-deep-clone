@@ -20,7 +20,7 @@ public class DeepClone {
 
     //collection of classes provided by jdk to access computer resources
     private static final List<Class> SKIP_CLONING_CLASSES = Collections.unmodifiableList(
-            Arrays.asList(FileSystem.class, ExecutorService.class));
+            Arrays.asList(FileSystem.class, ExecutorService.class, Thread.class, char.class));
 
     static {
         HashMap<Class, Object> primitivesMap = new HashMap<>();
@@ -81,8 +81,13 @@ public class DeepClone {
             return object;
         }
 
-        if (object instanceof Serializable) {
+        if (object instanceof String
+                || (object instanceof Serializable && areAllObjectFieldsSerializable(object))) {
             return this.createCopy((Serializable) object);
+        }
+
+        if (object instanceof Object[]) {
+            return cloneArray((Object[]) object);
         }
 
         Object clone = createDummyInstance(object);
@@ -104,6 +109,49 @@ public class DeepClone {
         // this implementation doesn't cover very few cases
     }
 
+    private boolean areAllObjectFieldsSerializable(Object object) {
+        List<Field> fields = Arrays.asList(object.getClass().getDeclaredFields());
+        fields.stream()
+                .filter(f -> !f.isAccessible())
+                .forEach(f -> f.setAccessible(true));
+
+        List<Object> fieldsValues = fields.stream()
+                .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                .filter(f -> !Modifier.isTransient(f.getModifiers()) || f.getType().isArray())
+                .filter(f-> !f.getType().equals(String.class))
+                .map(f -> getFieldValue(f, object))
+                .map(this::transformObjectToStreamOfContent)
+                .reduce(Stream.empty(), Stream::concat)
+                .filter(o -> o != null)
+                .collect(Collectors.toList());
+
+        if (object.getClass().isArray()) {
+            fieldsValues.addAll(transformObjectToStreamOfContent(object).collect(Collectors.toList()));
+        }
+
+        return fieldsValues.stream().allMatch(x -> x instanceof Serializable);
+    }
+
+    private Object getFieldValue(Field field, Object object) {
+        try {
+            return field.get(object);
+        } catch (IllegalAccessException e) {
+            return null;
+        }
+    }
+
+    private Stream<Object> transformObjectToStreamOfContent(Object object) {
+        if (object instanceof Object[]) {
+            return Stream.concat(Stream.of((Object []) object),
+                    Stream.of((Object []) object)
+                            .filter(o -> o instanceof Object[])
+                            .map(this::transformObjectToStreamOfContent))
+                    .filter(o -> !(o instanceof Object[]));
+        } else {
+            return Stream.of(object);
+        }
+    }
+
     private Object createCopy(Serializable object) {
         try {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
@@ -117,7 +165,7 @@ public class DeepClone {
             Object clone = inputStream.readObject();
             inputStream.close();
 
-            setFieldsData(object, clone, f -> Modifier.isTransient(f.getModifiers()));
+            setFieldsData(object, clone, f -> Modifier.isTransient(f.getModifiers()) && !f.getType().isArray());
 
             return clone;
         } catch (IOException | ClassNotFoundException e) {
@@ -151,6 +199,14 @@ public class DeepClone {
         } catch (IllegalAccessException e) {
             throw new CloneOperationException(e);
         }
+    }
+
+    private Object[] cloneArray(Object[] array) {
+        Object[] arrayClone = array.clone();
+        for (int i = 0; i < array.length; i++) {
+            arrayClone[i] = createCopy(array[i]);
+        }
+        return arrayClone;
     }
 
     private Object createDummyInstance(Object object) {
