@@ -257,6 +257,8 @@ public class DeepClone {
 
             if (knownObject.isPresent()) {
                 constructorParams.add(knownObject.get());
+            } else if(clazz.equals(constructor.getDeclaringClass())) {
+                constructorParams.add(null);
             } else {
                 Optional<?> dummyInstance = createDummyInstance(clazz);
                 if (dummyInstance.isPresent()) {
