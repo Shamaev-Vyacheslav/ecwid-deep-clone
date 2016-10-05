@@ -52,7 +52,7 @@ public class DeepClone {
     }
 
     private void addFieldsToKnownObjects(Object object) {
-        List<Field> fields = Arrays.asList(object.getClass().getDeclaredFields());
+        List<Field> fields = getAllClassFields(object.getClass());
 
         List<Object> values = new ArrayList<>();
         for (Field field : fields) {
@@ -114,14 +114,13 @@ public class DeepClone {
     }
 
     private boolean areAllObjectFieldsSerializable(Object object, Set<Object> passedObjects) {
-        List<Field> fields = Arrays.asList(object.getClass().getDeclaredFields());
+        List<Field> fields = getAllClassFields(object.getClass());
         fields.stream()
                 .filter(f -> !f.isAccessible())
                 .forEach(f -> f.setAccessible(true));
 
         List<Object> fieldsValues = fields.stream()
                 .filter(f -> !Modifier.isStatic(f.getModifiers()))
-                .filter(f -> !Modifier.isTransient(f.getModifiers()) || f.getType().isArray())
                 .map(f -> getFieldValue(f, object))
                 .map(this::transformObjectToStreamOfContent)
                 .reduce(Stream.empty(), Stream::concat)
@@ -192,11 +191,20 @@ public class DeepClone {
 
     private void setFieldsData(Object object, Object clone, Predicate<Field> fieldFilterPredicate) {
         if (object != null) {
-            Stream.of(object.getClass().getDeclaredFields())
+            getAllClassFields(object.getClass()).stream()
                     .filter(f -> !Modifier.isStatic(f.getModifiers()))
                     .filter(fieldFilterPredicate)
                     .forEach(f -> cloneField(clone, object, f));
         }
+    }
+
+    private List<Field> getAllClassFields(Class<?> c) {
+        List<Field> fields = new ArrayList<>();
+        while(c != null) {
+            fields.addAll(Arrays.asList(c.getDeclaredFields()));
+            c = c.getSuperclass();
+        }
+        return fields;
     }
 
     private void cloneField(Object objectToClone, Object objectFromClone, Field field) {

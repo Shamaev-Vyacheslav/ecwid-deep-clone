@@ -59,10 +59,68 @@ public class DeepCloneCollectionsTest {
 
     @Test
     public void hashMapClone() {
-        Map<Integer, BoxedPrimitiveFieldsClass> map = new HashMap<>();
+        cloneMap(new HashMap<>());
+    }
+
+    @Test
+    public void treeMapClone() {
+        cloneMap(new TreeMap<>());
+    }
+
+    private void cloneMap(Map<Integer, BoxedPrimitiveFieldsClass> map) {
         map.put(1, new BoxedPrimitiveFieldsClass(10, .2));
         map.put(2, new BoxedPrimitiveFieldsClass(20, .4));
         Map<Integer, BoxedPrimitiveFieldsClass> clone = DeepClone.of(map);
         assertEquals(map, clone);
+    }
+
+    @Test
+    public void cloneHashSet() {
+        cloneSet(new HashSet<>());
+    }
+
+    @Test
+    public void cloneTreeSet() {
+        cloneSet(new TreeSet<>());
+    }
+
+    @Test
+    public void cloneLinkedHashSet() {
+        cloneSet(new LinkedHashSet<>());
+    }
+
+    private void cloneSet(Set<BoxedPrimitiveFieldsClass> set) {
+        set.add(new BoxedPrimitiveFieldsClass(10, .2));
+        set.add(new BoxedPrimitiveFieldsClass(20, .4));
+        Set<BoxedPrimitiveFieldsClass> clone = DeepClone.of(set);
+        assertEquals(set, clone);
+    }
+
+    @Test
+    public void cloneArrayList() {
+        cloneList(new ArrayList<>());
+    }
+
+    @Test
+    public void cloneVector() {
+        cloneList(new Vector<>());
+    }
+
+    @Test
+    public void cloneLinkedList() {
+        cloneList(new LinkedList<>());
+    }
+
+    @Test
+    public void cloneStack() {
+        cloneList(new Stack<>());
+    }
+
+    private void cloneList(List<BoxedPrimitiveFieldsClass> list) {
+        list.add(new BoxedPrimitiveFieldsClass(90, .2));
+        list.add(new BoxedPrimitiveFieldsClass(80, 5.2));
+
+        List<BoxedPrimitiveFieldsClass> clone = DeepClone.of(list);
+        assertEquals(list, clone);
     }
 }

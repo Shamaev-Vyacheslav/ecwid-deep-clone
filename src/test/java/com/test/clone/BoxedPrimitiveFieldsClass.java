@@ -1,6 +1,9 @@
 package com.test.clone;
 
-public class BoxedPrimitiveFieldsClass {
+import org.junit.Ignore;
+
+@Ignore
+public class BoxedPrimitiveFieldsClass implements Comparable {
     Integer intField;
     Double doubleField;
 
@@ -26,5 +29,16 @@ public class BoxedPrimitiveFieldsClass {
         int result = intField != null ? intField.hashCode() : 0;
         result = 31 * result + (doubleField != null ? doubleField.hashCode() : 0);
         return result;
+    }
+
+    @Override
+    public int compareTo(Object o) {
+        if (this == o) {
+            return 0;
+        }
+        if (!(o instanceof BoxedPrimitiveFieldsClass)) {
+            return 1;
+        }
+        return intField - ((BoxedPrimitiveFieldsClass) o).intField;
     }
 }
