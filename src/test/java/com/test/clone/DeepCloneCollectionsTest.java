@@ -3,6 +3,7 @@ package com.test.clone;
 import org.junit.Test;
 
 import java.util.*;
+import java.util.concurrent.*;
 
 import static org.junit.Assert.*;
 
@@ -122,5 +123,20 @@ public class DeepCloneCollectionsTest {
 
         List<BoxedPrimitiveFieldsClass> clone = DeepClone.of(list);
         assertEquals(list, clone);
+    }
+
+    @Test
+    public void cloneLinkedBlockingDeque() {
+        Queue<BoxedPrimitiveFieldsClass> queue = new LinkedBlockingDeque<>();
+        queue.offer(new BoxedPrimitiveFieldsClass(90, .2));
+        queue.offer(new BoxedPrimitiveFieldsClass(80, 5.2));
+        Queue<BoxedPrimitiveFieldsClass> clone = DeepClone.of(queue);
+        assertFalse(queue == clone);
+        assertTrue(queue.size() == clone.size());
+        while (!queue.isEmpty()) {
+            BoxedPrimitiveFieldsClass q = queue.poll();
+            BoxedPrimitiveFieldsClass p = clone.poll();
+            assertTrue(q.equals(p));
+        }
     }
 }

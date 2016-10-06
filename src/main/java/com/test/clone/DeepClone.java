@@ -330,13 +330,23 @@ public class DeepClone {
 
         return CloneArgumentsCombiner.generateStream(paramsCollection)
                 .map(List::toArray)
-                .map(p -> invokeConstructor(constructor, p))
+                .map(p -> invokeConstructorSafe(constructor, p))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .findFirst();
     }
 
-    private List<Object> getKnownInstances(Class<?> classToSearch) {
+    private Optional<?> invokeConstructorSafe(Constructor<?> constructor, Object[] p) {
+        try {
+            return invokeConstructor(constructor, p);
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    private List<Object> getKnownInstances(Class<?> c) {
+        Class<?> classToSearch =
+                DEFAULT_VALUE_PRIMITIVES.containsKey(c) ? DEFAULT_VALUE_PRIMITIVES.get(c).getClass() : c;
         return knownObjects.stream()
                 .filter(o -> classToSearch.isAssignableFrom(o.getClass()))
                 .collect(Collectors.toList());
