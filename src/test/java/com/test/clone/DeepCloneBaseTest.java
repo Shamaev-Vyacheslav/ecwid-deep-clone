@@ -1,7 +1,9 @@
 package com.test.clone;
 
+import org.junit.Assert;
 import org.junit.Test;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -74,5 +76,11 @@ public class DeepCloneBaseTest {
         private FinalFieldClass(String str) {
             this.str = str;
         }
+    }
+
+    @Test
+    public void newDateTimeAPITest() {
+        LocalDate now = LocalDate.now();
+        Assert.assertEquals(now, DeepClone.of(now));
     }
 }
