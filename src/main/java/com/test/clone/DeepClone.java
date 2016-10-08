@@ -7,7 +7,6 @@ import com.test.clone.util.ClonedObjectsMap;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.nio.file.FileSystem;
 import java.util.*;
@@ -36,7 +35,8 @@ public class DeepClone {
         DEFAULT_VALUE_PRIMITIVES = Collections.unmodifiableMap(primitivesMap);
 
         List<Class<?>> skipCloningClasses = new ArrayList<>(primitivesMap.keySet());
-        skipCloningClasses.addAll(Arrays.asList(FileSystem.class, ExecutorService.class, Thread.class));
+        skipCloningClasses.addAll(Arrays.asList(FileSystem.class, ExecutorService.class, Thread.class,
+                ClassLoader.class, Class.class));
         SKIP_CLONING_CLASSES = Collections.unmodifiableList(skipCloningClasses);
     }
 
@@ -194,9 +194,9 @@ public class DeepClone {
     private boolean shouldAddFieldValueToClonedObjectsMap(Field f, Object object) {
         try {
             Object fieldValue = f.get(object);
-            return !(fieldValue == null
-                    || fieldValue.getClass().isArray()
-                    || isJavaLangClass(fieldValue.getClass()));
+            return fieldValue != null
+                    && !fieldValue.getClass().isArray()
+                    && !isJavaLangClass(fieldValue.getClass());
         } catch (IllegalAccessException e) {
             return false;
         }
@@ -320,11 +320,7 @@ public class DeepClone {
             }
         }
 
-        try {
-            return Optional.of(constructor.newInstance(constructorParams.toArray()));
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            return Optional.empty();
-        }
+        return invokeConstructorSafe(constructor, constructorParams.toArray());
     }
 
     private Optional<?> createDummyInstance(Class<?> c) {
@@ -363,14 +359,6 @@ public class DeepClone {
                 .findFirst();
     }
 
-    private Optional<?> invokeConstructorSafe(Constructor<?> constructor, Object[] p) {
-        try {
-            return invokeConstructor(constructor, p);
-        } catch (Exception e) {
-            return Optional.empty();
-        }
-    }
-
     private List<Object> getKnownInstances(Class<?> c) {
         Class<?> classToSearch =
                 DEFAULT_VALUE_PRIMITIVES.containsKey(c) ? DEFAULT_VALUE_PRIMITIVES.get(c).getClass() : c;
@@ -379,10 +367,10 @@ public class DeepClone {
                 .collect(Collectors.toList());
     }
 
-    private Optional<?> invokeConstructor(Constructor<?> constructor, Object[] params) {
+    private Optional<?> invokeConstructorSafe(Constructor<?> constructor, Object[] params) {
         try {
             return Optional.of(constructor.newInstance(params));
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        } catch (Exception e) {
             return Optional.empty();
         }
     }
