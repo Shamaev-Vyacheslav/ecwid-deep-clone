@@ -28,16 +28,6 @@ public class DeepCloneCollectionsTest {
     }
 
     @Test
-    public void cloneArrayListBoxedPrimitives() {
-        List<BoxedPrimitiveFieldsClass> object = new ArrayList<>();
-        object.add(new BoxedPrimitiveFieldsClass(90, .2));
-        object.add(new BoxedPrimitiveFieldsClass(80, 5.2));
-
-        List<BoxedPrimitiveFieldsClass> clone = DeepClone.of(object);
-        assertEquals(object, clone);
-    }
-
-    @Test
     public void cloneArrayListPrimitives() {
         List<PrimitiveFieldsClass> object = new ArrayList<>();
         object.add(new PrimitiveFieldsClass(90, .2));
@@ -59,13 +49,10 @@ public class DeepCloneCollectionsTest {
     }
 
     @Test
-    public void hashMapClone() {
-        cloneMap(new HashMap<>());
-    }
-
-    @Test
-    public void treeMapClone() {
-        cloneMap(new TreeMap<>());
+    public void cloneMap() {
+        List<Map<Integer, BoxedPrimitiveFieldsClass>> queues = Arrays.asList(new HashMap<>(), new TreeMap<>(),
+                new Hashtable<>(), new ConcurrentHashMap<>(), new ConcurrentSkipListMap<>());
+        queues.forEach(this::cloneMap);
     }
 
     private void cloneMap(Map<Integer, BoxedPrimitiveFieldsClass> map) {
@@ -76,18 +63,10 @@ public class DeepCloneCollectionsTest {
     }
 
     @Test
-    public void cloneHashSet() {
-        cloneSet(new HashSet<>());
-    }
-
-    @Test
-    public void cloneTreeSet() {
-        cloneSet(new TreeSet<>());
-    }
-
-    @Test
-    public void cloneLinkedHashSet() {
-        cloneSet(new LinkedHashSet<>());
+    public void cloneSet() {
+        List<Set<BoxedPrimitiveFieldsClass>> queues = Arrays.asList(new HashSet<>(), new TreeSet<>(),
+                new LinkedHashSet<>(), new ConcurrentSkipListSet<>(), new CopyOnWriteArraySet<>());
+        queues.forEach(this::cloneSet);
     }
 
     private void cloneSet(Set<BoxedPrimitiveFieldsClass> set) {
@@ -98,23 +77,10 @@ public class DeepCloneCollectionsTest {
     }
 
     @Test
-    public void cloneArrayList() {
-        cloneList(new ArrayList<>());
-    }
-
-    @Test
-    public void cloneVector() {
-        cloneList(new Vector<>());
-    }
-
-    @Test
-    public void cloneLinkedList() {
-        cloneList(new LinkedList<>());
-    }
-
-    @Test
-    public void cloneStack() {
-        cloneList(new Stack<>());
+    public void cloneList() {
+        List<List<BoxedPrimitiveFieldsClass>> queues = Arrays.asList(new ArrayList<>(), new CopyOnWriteArrayList<>(),
+                new Vector<>(), new LinkedList<>(), new Stack<>());
+        queues.forEach(this::cloneList);
     }
 
     private void cloneList(List<BoxedPrimitiveFieldsClass> list) {
@@ -126,8 +92,14 @@ public class DeepCloneCollectionsTest {
     }
 
     @Test
-    public void cloneLinkedBlockingDeque() {
-        Queue<BoxedPrimitiveFieldsClass> queue = new LinkedBlockingDeque<>();
+    public void cloneQueue() {
+        List<Queue<BoxedPrimitiveFieldsClass>> queues = Arrays.asList(new LinkedBlockingDeque<>(),
+                new PriorityQueue<>(), new ArrayDeque<>(), new ConcurrentLinkedQueue<>(),
+                new ConcurrentLinkedDeque<>(), new SynchronousQueue<>());
+        queues.forEach(this::cloneQueue);
+    }
+
+    private void cloneQueue(Queue<BoxedPrimitiveFieldsClass> queue) {
         queue.offer(new BoxedPrimitiveFieldsClass(90, .2));
         queue.offer(new BoxedPrimitiveFieldsClass(80, 5.2));
         Queue<BoxedPrimitiveFieldsClass> clone = DeepClone.of(queue);
