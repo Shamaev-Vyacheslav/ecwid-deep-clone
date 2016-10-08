@@ -2,6 +2,7 @@ package com.test.clone;
 
 import com.test.clone.util.ClassLoaderUtil;
 import com.test.clone.util.CloneArgumentsCombiner;
+import com.test.clone.util.ClonedObjectsMap;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -16,14 +17,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DeepClone {
-    private static final Map<Class, Object> DEFAULT_VALUE_PRIMITIVES;
+    private static final Map<Class<?>, Object> DEFAULT_VALUE_PRIMITIVES;
 
     //collection of classes provided by jdk to access computer resources
-    private static final List<Class> SKIP_CLONING_CLASSES = Collections.unmodifiableList(
-            Arrays.asList(FileSystem.class, ExecutorService.class, Thread.class, char.class));
+    private static final List<Class<?>> SKIP_CLONING_CLASSES;
 
     static {
-        HashMap<Class, Object> primitivesMap = new HashMap<>();
+        HashMap<Class<?>, Object> primitivesMap = new HashMap<>();
         primitivesMap.put(byte.class, (byte) 0);
         primitivesMap.put(short.class, (short) 0);
         primitivesMap.put(int.class, 0);
@@ -34,9 +34,13 @@ public class DeepClone {
         primitivesMap.put(boolean.class, false);
 
         DEFAULT_VALUE_PRIMITIVES = Collections.unmodifiableMap(primitivesMap);
+
+        List<Class<?>> skipCloningClasses = new ArrayList<>(primitivesMap.keySet());
+        skipCloningClasses.addAll(Arrays.asList(FileSystem.class, ExecutorService.class, Thread.class));
+        SKIP_CLONING_CLASSES = Collections.unmodifiableList(skipCloningClasses);
     }
 
-    private final Map<Object, Object> clonedObjects = new TreeMap<>((x, y) -> x == y ? 0 : 1);
+    private final Map<Object, Object> clonedObjects = new ClonedObjectsMap<>();
 
     private final Set<Object> knownObjects = new HashSet<>();
 
@@ -56,7 +60,6 @@ public class DeepClone {
 
         List<Object> values = new ArrayList<>();
         for (Field field : fields) {
-            field.setAccessible(true);
             try {
                 Object newValue = field.get(object);
                 if (!knownObjects.contains(newValue) && newValue != null) {
@@ -64,7 +67,6 @@ public class DeepClone {
                 }
             } catch (IllegalAccessException e) {
                 throw new CloneOperationException(e);
-                //won't happen
             }
         }
         knownObjects.addAll(values);
@@ -77,13 +79,14 @@ public class DeepClone {
         }
 
         if (object == null
-                || isFunctionalInterfaceImpl(object.getClass())) {
+                || isFunctionalInterfaceImpl(object.getClass())
+                || SKIP_CLONING_CLASSES.stream().anyMatch(x -> x.isInstance(object))) {
             return object;
         }
 
         if (object instanceof String
                 || (object instanceof Serializable && areAllObjectFieldsSerializable(object))) {
-            return this.createCopy((Serializable) object);
+            return createCopy((Serializable) object);
         }
 
         if (object instanceof Object[]) {
@@ -114,19 +117,13 @@ public class DeepClone {
     }
 
     private boolean areAllObjectFieldsSerializable(Object object, Set<Object> passedObjects) {
-        List<Field> fields = getAllClassFields(object.getClass());
-        fields.stream()
-                .filter(f -> !f.isAccessible())
-                .forEach(f -> f.setAccessible(true));
-
-        List<Object> fieldsValues = fields.stream()
+        List<Object> fieldsValues = getAllClassFields(object.getClass()).stream()
                 .filter(f -> !Modifier.isStatic(f.getModifiers()))
                 .map(f -> getFieldValue(f, object))
                 .map(this::transformObjectToStreamOfContent)
                 .reduce(Stream.empty(), Stream::concat)
                 .filter(o -> o != null)
-                .filter(o -> o.getClass().getPackage() != null
-                        && !"java.lang".equals(o.getClass().getPackage().getName())) //skip native magic
+                .filter(o -> !isJavaLangClass(o.getClass()))
                 .collect(Collectors.toList());
 
         if (object.getClass().isArray()) {
@@ -177,10 +174,45 @@ public class DeepClone {
             Object clone = inputStream.readObject();
             inputStream.close();
 
+            addDeserializedDataToClonedObjectMap(object, clone);
             setFieldsData(object, clone, f -> Modifier.isTransient(f.getModifiers()) && !f.getType().isArray());
 
             return clone;
         } catch (IOException | ClassNotFoundException e) {
+            throw new CloneOperationException(e);
+        }
+    }
+
+    private void addDeserializedDataToClonedObjectMap(Object object, Object clone) {
+        clonedObjects.put(object, clone);
+        getAllClassFields(object.getClass()).stream()
+                .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                .filter(f -> shouldAddFieldValueToClonedObjectsMap(f, object))
+                .forEach(f -> addDeserializedDataToClonedObjectMap(object, clone, f));
+    }
+
+    private boolean shouldAddFieldValueToClonedObjectsMap(Field f, Object object) {
+        try {
+            Object fieldValue = f.get(object);
+            return !(fieldValue == null
+                    || fieldValue.getClass().isArray()
+                    || isJavaLangClass(fieldValue.getClass()));
+        } catch (IllegalAccessException e) {
+            return false;
+        }
+    }
+
+    private boolean isJavaLangClass(Class<?> clazz) {
+        return clazz.getPackage() != null && clazz.getPackage().getName().equals("java.lang");
+    }
+
+    private void addDeserializedDataToClonedObjectMap(Object object, Object clone, Field field) {
+        try {
+            Object oldValue = field.get(object);
+            Object clonedValue = field.get(clone);
+            clonedObjects.put(oldValue, clonedValue);
+            addDeserializedDataToClonedObjectMap(oldValue, clonedValue);
+        } catch (IllegalAccessException e) {
             throw new CloneOperationException(e);
         }
     }
@@ -193,7 +225,8 @@ public class DeepClone {
         if (object != null) {
             getAllClassFields(object.getClass()).stream()
                     .filter(f -> !Modifier.isStatic(f.getModifiers()))
-                    .filter(fieldFilterPredicate)
+                    .filter(fieldFilterPredicate
+                            .or(f -> object.getClass().isMemberClass() && f.getName().equals("this$0")))
                     .forEach(f -> cloneField(clone, object, f));
         }
     }
@@ -204,14 +237,13 @@ public class DeepClone {
             fields.addAll(Arrays.asList(c.getDeclaredFields()));
             c = c.getSuperclass();
         }
+        fields.stream()
+                .filter(f -> !f.isAccessible())
+                .forEach(f -> f.setAccessible(true));
         return fields;
     }
 
     private void cloneField(Object objectToClone, Object objectFromClone, Field field) {
-        if (!field.isAccessible()) {
-            field.setAccessible(true);
-        }
-
         try {
             Object value = field.get(objectFromClone);
             Object clonedValue = createCopy(value);
@@ -231,11 +263,6 @@ public class DeepClone {
     }
 
     private Object createDummyInstance(Object object) {
-        if (SKIP_CLONING_CLASSES.stream().anyMatch(x -> x.isInstance(object))
-                || object == null) {
-            return object;
-        }
-
         Optional<?> dummyInstance = createDummyInstance(object.getClass());
 
         if (dummyInstance.isPresent()) {
@@ -270,7 +297,7 @@ public class DeepClone {
             } else {
                 Optional<?> dummyInstance = createDummyInstance(clazz);
                 if (dummyInstance.isPresent()) {
-                    constructorParams.add(dummyInstance);
+                    constructorParams.add(dummyInstance.get());
                 } else {
                     if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
                         constructorParams.add(ClassLoaderUtil.getLoadedClasses().stream()
